@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Text;
 using System.Text.RegularExpressions;
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
@@ -42,6 +44,7 @@ public sealed class GigDetailParser(MuziekladderSelectors selectors)
             return null;
 
         var ev = new EventDto();
+        ev.EventLink = UriNormalizer.CanonicalGigUrl(gigPageUri);
 
         var h = root.QuerySelector(_selectors.Headline);
         ev.Title = h?.TextContent?.Trim() ?? "";
@@ -84,8 +87,7 @@ public sealed class GigDetailParser(MuziekladderSelectors selectors)
 
         TryFillCoordinates(root, ev.Location);
 
-        foreach (var url in CollectImageUrls(root, gigPageUri))
-            ev.ImageUrls.Add(url);
+        ev.ImageUrl = TryFirstEventPosterFromDataImg(root);
 
         ev.Tickets.AddRange(CollectTickets(root, gigPageUri));
         if (ev.Tickets.Count == 0 && !string.IsNullOrEmpty(ev.OriginalEventLink))
@@ -134,6 +136,16 @@ public sealed class GigDetailParser(MuziekladderSelectors selectors)
             if (venueA is not null)
                 loc.VenueName = venueA.TextContent.Trim();
 
+            var venueListing = locInfo?.QuerySelector("a[href*='/locaties/']") ??
+                               block.QuerySelector("h3 a[href*='/locaties/']");
+            if (venueListing is not null)
+            {
+                var vHref = venueListing.GetAttribute("href") ?? "";
+                var venueAbs = UriNormalizer.ToAbsoluteString(baseUri, vHref);
+                if (!string.IsNullOrEmpty(venueAbs))
+                    loc.MuziekladderVenueUrl = venueAbs;
+            }
+
             var ul = block.QuerySelector("ul.list-unstyled");
             if (ul is not null)
             {
@@ -176,21 +188,59 @@ public sealed class GigDetailParser(MuziekladderSelectors selectors)
         }
     }
 
-    private static List<string> CollectImageUrls(IElement root, Uri baseUri)
+    private static string? TryFirstEventPosterFromDataImg(IElement root)
     {
-        var list = new List<string>();
-        foreach (var img in root.QuerySelectorAll("img[src]"))
+        var eventScope = root.QuerySelector("[itemscope][itemtype*='Event']");
+        var figures = (eventScope ?? root).QuerySelectorAll("figure[data-img]");
+        if (figures.Length == 0)
+            figures = root.QuerySelectorAll("figure[data-img]");
+
+        foreach (var fig in figures)
         {
-            var src = img.GetAttribute("src") ?? "";
-            if (string.IsNullOrWhiteSpace(src) || src.Contains("data:", StringComparison.OrdinalIgnoreCase))
-                continue;
-            var url = UriNormalizer.ToAbsoluteString(baseUri, src);
-            if (list.Contains(url))
-                continue;
-            list.Add(url);
+            var url = TryDecodeDataImgUrl(fig.GetAttribute("data-img"));
+            if (!string.IsNullOrEmpty(url))
+                return url;
         }
 
-        return list;
+        return null;
+    }
+
+    private static string? TryDecodeDataImgUrl(string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+            return null;
+        var normalized = token.Trim().Replace('-', '+').Replace('_', '/');
+        var pad = normalized.Length % 4;
+        if (pad != 0)
+            normalized += new string('=', 4 - pad);
+
+        byte[] raw;
+        try
+        {
+            raw = Convert.FromBase64String(normalized);
+        }
+        catch
+        {
+            return null;
+        }
+
+        try
+        {
+            using var input = new MemoryStream(raw);
+            using var zlib = new ZLibStream(input, CompressionMode.Decompress);
+            using var output = new MemoryStream();
+            zlib.CopyTo(output);
+            var text = Encoding.UTF8.GetString(output.ToArray()).Trim();
+            if (text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                text.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                return text;
+        }
+        catch(Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+        }
+
+        return null;
     }
 
     private static List<TicketDto> CollectTickets(IElement root, Uri baseUri)

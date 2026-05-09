@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace EventsParser;
 
 public sealed class LocationDto
@@ -13,4 +15,9 @@ public sealed class LocationDto
     public string Address { get; set; } = "";
 
     public string VenueName { get; set; } = "";
+
+    public string? VenueWebsite { get; set; }
+
+    [JsonIgnore]
+    public string? MuziekladderVenueUrl { get; set; }
 }
