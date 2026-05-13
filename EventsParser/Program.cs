@@ -6,6 +6,7 @@ const string DefaultOut = "events.json";
 var argsList = args.ToList();
 var scheduleMode = TakeFlag(ref argsList, "--schedule");
 var runOnStart = TakeFlag(ref argsList, "--run-on-start");
+var maxGigs = TakeOptionalPositiveInt(ref argsList, "--max-gigs");
 
 var site = Environment.GetEnvironmentVariable("SITE") ?? "muziekladder";
 ISiteProfile profile = site.ToLowerInvariant() switch
@@ -16,7 +17,6 @@ ISiteProfile profile = site.ToLowerInvariant() switch
 
 var agendaUrl = argsList.Count > 0 ? argsList[0] : profile.DefaultAgendaUrl;
 var outputPath = argsList.Count > 1 ? argsList[1] : DefaultOut;
-var maxGigs = int.TryParse(Environment.GetEnvironmentVariable("MAX_GIGS"), out var mg) ? mg : 0;
 var delayMs = int.TryParse(Environment.GetEnvironmentVariable("DELAY_MS"), out var d) ? d : 100;
 
 using var cts = new CancellationTokenSource();
@@ -64,4 +64,16 @@ static bool TakeFlag(ref List<string> list, string flag)
         return false;
     list.RemoveAt(i);
     return true;
+}
+
+static int TakeOptionalPositiveInt(ref List<string> list, string flag)
+{
+    var i = list.IndexOf(flag);
+    if (i < 0 || i + 1 >= list.Count)
+        return 0;
+    if (!int.TryParse(list[i + 1], out var v) || v <= 0)
+        return 0;
+    list.RemoveAt(i + 1);
+    list.RemoveAt(i);
+    return v;
 }

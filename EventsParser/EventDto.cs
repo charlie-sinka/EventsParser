@@ -2,6 +2,8 @@ namespace EventsParser;
 
 public sealed class EventDto
 {
+    public string EventLink { get; set; } = "";
+
     public string Title { get; set; } = "";
 
     public string Date { get; set; } = "";
@@ -16,7 +18,7 @@ public sealed class EventDto
 
     public List<string> Genres { get; set; } = [];
 
-    public List<string> ImageUrls { get; set; } = [];
+    public string? ImageUrl { get; set; }
 
     public List<TicketDto> Tickets { get; set; } = [];
 

@@ -28,5 +28,7 @@ public sealed class MuziekladderSelectors
 
     public string CountryName { get; set; } = ".country_name";
 
+    public string NextPageLink { get; set; } = "a.next-page[href]";
+
     public static MuziekladderSelectors Default { get; } = new();
 }
