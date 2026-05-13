@@ -10,14 +10,22 @@ internal static class VenueWebsiteExtractor
         var doc = parser.ParseDocument(html);
         foreach (var strong in doc.QuerySelectorAll("td strong"))
         {
-            if (!strong.TextContent.Contains("Website", StringComparison.OrdinalIgnoreCase))
+            if (!strong.TextContent.Trim().Equals("Website", StringComparison.OrdinalIgnoreCase))
                 continue;
-            var td = strong.Closest("td");
-            if (td is null)
+
+            var tr = strong.Closest("tr");
+            if (tr is null)
                 continue;
-            var a = td.QuerySelector("a[href^='http']");
-            var href = a?.GetAttribute("href");
-            return string.IsNullOrWhiteSpace(href) ? null : href.Trim();
+
+            foreach (var a in tr.QuerySelectorAll("a[href]"))
+            {
+                var href = a.GetAttribute("href")?.Trim();
+                if (string.IsNullOrEmpty(href))
+                    continue;
+                if (href.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                    href.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                    return href;
+            }
         }
 
         return null;
